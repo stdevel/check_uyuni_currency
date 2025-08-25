@@ -57,10 +57,6 @@ def get_credentials(login_type, input_file=None):
         except OSError:
             LOGGER.warning("File non-existent or permissions not 0600!")
             sys.exit(1)
-            LOGGER.debug("Prompting for login credentials as we have a faulty file")
-            s_username = input(login_type + " Username: ")
-            s_password = getpass.getpass(login_type + " Password: ")
-            _credentials = (s_username, s_password)
     elif (
         login_type.upper() + "_LOGIN" in os.environ
         and login_type.upper() + "_PASSWORD" in os.environ
@@ -380,7 +376,7 @@ def get_currency_data(options):
             counter = counter + 1
         # clean removed hosts
         system_currency = [system for system in system_currency if system is not None]
- 
+
     LOGGER.debug("System stats: %s", system_stats)
 
 
@@ -454,7 +450,7 @@ def parse_options(args=None):
         dest="verify_ssl",
         default=True,
         action="store_false",
-        help="disables SSL verificatino (default: no)"
+        help="disables SSL verification (default: no)"
     )
 
     # -y / --generic-statistics
