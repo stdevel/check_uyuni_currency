@@ -1,18 +1,23 @@
-name: check_spacewalk_currency
+name: check_uyuni_currency
 description: "file:///README.md"
-url: "https://github.com/stdevel/check_spacewalk_currency"
-tags: Spacewalk,SUSE Manager,Red Hat Satellite,Compliance
+url: "https://github.com/stdevel/check_uyuni_currency"
+tags: Uyuni,SUSE Manager,SUSE Multi-Linux Manager,Compliance
 vendor: Linux
 target: Operating System
 type: Plugin
 license: gplv3
 releases: 
-  - 
-    name: 0.5.6
+  - name: 0.7.0
+    description: "0.7.0 Release"
+    files: 
+      - name: check_uyuni_currency.py
+        url: "file:///check_uyuni_currency.py"
+        description: "Release 0.7.0"
+        checksum: 144bc78d33df6dd8a2b1a6858c940c16
+  - name: 0.5.6
     description: "0.5.6 Release"
     files: 
-      - 
-        name: check_spacewalk_currency.py
-        url: "file:///check_spacewalk_currency.py"
+      - name: check_uyuni_currency.py
+        url: "file:///check_uyuni_currency.py"
         description: "Release 0.5.6"
-        checksum: bb12ecc6eea3d70879ecd787169855df
+        checksum: c68201f8840abdfe2c6d6e04361776bd
