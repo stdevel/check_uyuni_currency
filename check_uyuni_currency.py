@@ -316,7 +316,7 @@ def get_currency_data(options):
     global system_currency
     global system_stats
 
-    (username, password) = get_credentials("Satellite", options.authfile)
+    (username, password) = get_credentials("Uyuni", options.authfile)
 
     # connect to Uyuni
     try:
