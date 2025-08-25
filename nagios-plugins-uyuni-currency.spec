@@ -49,6 +49,8 @@ rm -rf $RPM_BUILD_ROOT
         %config %{_sysconfdir}/nagios/plugins.d/check_uyuni_currency.cfg
 %endif
 %{_libdir}/nagios/plugins/check_uyuni_currency/check_uyuni_currency.py
+%{_libdir}/nagios/plugins/check_repodata/uyuni.py
+%{_libdir}/nagios/plugins/check_repodata/exceptions.py
 
 
 %changelog
