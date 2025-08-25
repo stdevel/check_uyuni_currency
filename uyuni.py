@@ -5,17 +5,14 @@ Uyuni XMLRPC API client
 from __future__ import (absolute_import, division, print_function)
 import logging
 import ssl
-import base64
-from datetime import datetime, timedelta
-from xmlrpc.client import DateTime, Fault, ServerProxy
+from xmlrpc.client import Fault, ServerProxy
 
 from exceptions import (
     APILevelNotSupportedException,
     EmptySetException,
     InvalidCredentialsException,
     SessionException,
-    SSLCertVerificationError,
-    CustomVariableExistsException
+    SSLCertVerificationError
 )
 
 __metaclass__ = type
@@ -83,6 +80,7 @@ class UyuniAPIClient:
         self._connect()
         self.validate_api_support()
 
+
     def _connect(self):
         """
         This function establishes a connection to Uyuni
@@ -110,6 +108,7 @@ class UyuniAPIClient:
                 f"Generic remote communication error: {err.faultString!r}"
             ) from err
 
+
     def validate_api_support(self):
         """
         Checks whether the API version on the Uyuni server is supported.
@@ -132,4 +131,156 @@ class UyuniAPIClient:
             self.LOGGER.error(err)
             raise APILevelNotSupportedException(
                 "Unable to verify API version"
+            ) from err
+
+
+    def get_hosts(self):
+        """
+        Returns all system IDs
+        """
+        try:
+            hosts = self._session.system.listSystems(
+                self._api_key
+            )
+            if hosts:
+                return [x["id"] for x in hosts]
+            raise EmptySetException(
+                "No systems found"
+            )
+        except Fault as err:
+            raise SessionException(
+                f"Generic remote communication error: {err.faultString!r}"
+            ) from err
+
+
+    def get_hostname_by_id(self, system_id):
+        """
+        Returns the hostname of a particular system
+
+        :param system_id: profile ID
+        :type system_id: int
+        """
+        try:
+            host = self._session.system.getName(
+                self._api_key, system_id
+            )
+            return host["name"]
+        except Fault as err:
+            if "no such system" in err.faultString.lower():
+                raise EmptySetException(
+                    f"System not found: {system_id!r}"
+                ) from err
+            raise SessionException(
+                f"Generic remote communication error: {err.faultString!r}"
+            ) from err
+
+
+    def get_host_id(self, hostname):
+        """
+        Returns the profile ID of a particular system
+
+        :param hostname: system hostname
+        :type hostname: str
+        """
+        try:
+            host_id = self._session.system.getId(
+                self._api_key, hostname
+            )
+            if host_id:
+                return host_id[0]["id"]
+            raise EmptySetException(
+                f"System not found: {hostname!r}"
+            )
+        except Fault as err:
+            if "no such system" in err.faultString.lower():
+                raise EmptySetException(
+                    f"System not found: {hostname!r}"
+                ) from err
+            raise SessionException(
+                f"Generic remote communication error: {err.faultString!r}"
+            ) from err
+
+
+    def get_inactive_hosts(self):
+        """
+        Returns all inactive system IDs
+        """
+        try:
+            hosts = self._session.system.listInactiveSystems(
+                self._api_key
+            )
+            if hosts:
+                _hosts = [x["id"] for x in hosts]
+            else:
+                _hosts = []
+            return _hosts
+        except Fault as err:
+            raise SessionException(
+                f"Generic remote communication error: {err.faultString!r}"
+            ) from err
+
+
+    def get_outdated_hosts(self):
+        """
+        Returns all outdated system IDs
+        """
+        try:
+            hosts = self._session.system.listOutOfDateSystems(
+                self._api_key
+            )
+            if hosts:
+                _hosts = [x["id"] for x in hosts]
+            else:
+                _hosts = []
+            return _hosts
+        except Fault as err:
+            raise SessionException(
+                f"Generic remote communication error: {err.faultString!r}"
+            ) from err
+
+
+    def get_system_currency(self):
+        """
+        Returns all systems' currency scores
+        """
+        try:
+            scores = self._session.system.getSystemCurrencyScores(
+                self._api_key
+            )
+            if scores:
+                return scores
+            raise EmptySetException(
+                "No systems found"
+            )
+        except Fault as err:
+            raise SessionException(
+                f"Generic remote communication error: {err.faultString!r}"
+            ) from err
+
+
+    def get_host_upgrades(self, system_id):
+        """
+        Returns available package upgrades
+
+        :param system_id: profile ID
+        :type system_id: int
+        """
+        if not isinstance(system_id, int):
+            raise EmptySetException(
+                "No system found - use system profile IDs"
+            )
+
+        try:
+            packages = self._session.system.listLatestUpgradablePackages(
+                self._api_key, system_id
+            )
+            self.LOGGER.debug("Found %i upgrades for %s: %s", len(packages), system_id, packages)
+            return packages
+        except Fault as err:
+            if "no such system" in err.faultString.lower():
+                raise SessionException(
+                    f"System not found: {system_id!r}"
+                ) from err
+            raise SessionException(
+                f"Generic remote communication error: {err.faultString!r}"
             ) from err

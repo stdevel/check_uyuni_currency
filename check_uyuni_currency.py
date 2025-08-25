@@ -13,6 +13,7 @@ import stat
 import math
 import sys
 from uyuni import UyuniAPIClient
+from exceptions import SSLCertVerificationError
 
 # some global variables
 __version__ = "0.7.0"
@@ -44,7 +45,7 @@ def get_credentials(login_type, input_file=None):
         try:
             # check filemode and read file
             filemode = oct(stat.S_IMODE(os.lstat(input_file).st_mode))
-            if filemode == "0600":
+            if filemode == "0o600":
                 LOGGER.debug("File permission matches 0600")
                 with open(input_file, "r", encoding="utf-8") as auth_file:
                     s_username = auth_file.readline().replace("\n", "")
@@ -52,10 +53,10 @@ def get_credentials(login_type, input_file=None):
                 _credentials = (s_username, s_password)
             else:
                 LOGGER.warning("File permissions (%s) not matching 0600!", filemode)
-                # sys.sys.exit(1)
+                sys.exit(1)
         except OSError:
             LOGGER.warning("File non-existent or permissions not 0600!")
-            # sys.sys.exit(1)
+            sys.exit(1)
             LOGGER.debug("Prompting for login credentials as we have a faulty file")
             s_username = input(login_type + " Username: ")
             s_password = getpass.getpass(login_type + " Password: ")
@@ -221,7 +222,7 @@ def check_systems(options):
                     options.total_warn,
                     options.total_crit,
             )
-            snip_total = "{snip_total}{_total}"
+            snip_total = f"{snip_total}{_total}"
 
         # critical package updates
         _security = check_value(
@@ -230,7 +231,7 @@ def check_systems(options):
                 options.security_warn,
                 options.security_crit,
         )
-        snip_crit = "{snip_crit}{_security}"
+        snip_crit = f"{snip_crit}{_security}"
 
         # bug fixes
         _bugs = check_value(
@@ -239,7 +240,7 @@ def check_systems(options):
                 options.bugs_warn,
                 options.bugs_crit,
         )
-        snip_bugs = "{snip_bugs}{_bugs}"
+        snip_bugs = f"{snip_bugs}{_bugs}"
 
     # generate perfdata
     if options.show_perfdata:
@@ -312,82 +313,99 @@ def check_systems(options):
     sys.exit(STATE)
 
 
-def get_currency_data(stats_only=False):
+def get_currency_data(options):
     """
     get _all_ the currency or statistics data
     """
-    # global system_currency
-    # global system_stats
+    global system_currency
+    global system_stats
 
-    # (username, password) = get_credentials("Satellite", options.authfile)
-    # satellite_url = "http://{0}/rpc/api".format(options.server)
-    # client = xmlrpclib.Server(satellite_url, verbose=options.debug)
+    (username, password) = get_credentials("Satellite", options.authfile)
 
-    # try:
-    #     key = client.auth.login(username, password)
-    #     check_if_api_is_supported(client)
+    # connect to Uyuni
+    try:
+        api_instance = UyuniAPIClient(
+            logging.ERROR,
+            options.server,
+            username,
+            password,
+            verify=options.verify_ssl
+        )
+    except SSLCertVerificationError as err:
+        raise BaseException("Failed to verify SSL certificate") from err
+    except Exception as err:
+        raise BaseException(f"Failed to create API connection: {err}") from err
 
-    #     if stats_only:
-    #         # statistics only
-    #         system_stats["total"] = len(client.system.listSystems(key))
-    #         system_stats["inactive"] = len(client.system.listInactiveSystems(key))
-    #         system_stats["outdated"] = len(client.system.listOutOfDateSystems(key))
-    #     else:
-    #         # currency data only
-    #         system_currency = client.system.getSystemCurrencyScores(key)
+    # resolve system IDs if strings given
+    if len(options.system) >= 1:
+        LOGGER.debug("Limiting system scope")
+        _system_id = [api_instance.get_host_id(x) for x in options.system]
+        print(_system_id)
 
-    #         # append hostname
-    #         counter = 0
-    #         for system in system_currency:
-    #             system_sid = client.system.getName(key, system["sid"])
-    #             LOGGER.debug(
-    #                 "DEBUG: Hostname for SID '{0}' seems to be '{1}'".format(
-    #                     system["sid"], system_sid["name"]
-    #                 )
-    #             )
-    #             system["hostname"] = system_sid["name"]
-    #             # get total package counter
-    #             upgradable_pkgs = client.system.listLatestUpgradablePackages(
-    #                 key, system["sid"]
-    #             )
-    #             if len(upgradable_pkgs) > 0:
-    #                 system["all"] = len(upgradable_pkgs) - 1
-    #             else:
-    #                 system["all"] = 0
-    #             # drop host if not requested
-    #             if options.all_systems is False:
-    #                 if system["hostname"] not in options.system:
-    #                     system_currency[counter] = None
-    #             counter = counter + 1
-    #         # clean removed hosts
-    #         system_currency = [system for system in system_currency if system is not None]
-    # except:
-    #     print("Unauthenticated.")
-    #     sys.exit(1)
+    # gather data
+    if options.gen_stats:
+        # only statistics
+        system_stats["total"] = len(api_instance.get_hosts())
+        system_stats["inactive"] = len(api_instance.get_inactive_hosts())
+        system_stats["outdated"] = len(api_instance.get_outdated_hosts())
+    else:
+        # currency data
+        system_currency = api_instance.get_system_currency()
+        if len(options.system) >= 1:
+            LOGGER.debug("Limiting system currency scope")
+            system_currency = [x for x in system_currency if x["sid"] in _system_id]
+
+        LOGGER.debug("All systems' currency scores: %s", system_currency)
+
+        # append hostname
+        counter = 0
+        for system in system_currency:
+            _hostname = api_instance.get_hostname_by_id(system["sid"])
+            LOGGER.debug(
+                "Hostname for SID '%s' seems to be '%s'",
+                    system["sid"], _hostname
+            )
+            system["hostname"] = _hostname
+            # get total package counter
+            LOGGER.debug("Searching for upgrades available for %s (%s)", _hostname, system["sid"])
+            upgradable_pkgs =  api_instance.get_host_upgrades(system["sid"])
+            if len(upgradable_pkgs) > 0:
+                system["all"] = len(upgradable_pkgs) - 1
+            else:
+                system["all"] = 0
+            # drop host if not requested
+            if options.all_systems is False:
+                if system["hostname"] not in options.system:
+                    system_currency[counter] = None
+            counter = counter + 1
+        # clean removed hosts
+        system_currency = [system for system in system_currency if system is not None]
+ 
+    LOGGER.debug("System stats: %s", system_stats)
 
 
 def parse_options(args=None):
     """
     Parses options and arguments.
     """
-    desc = """%prog is used to check systems managed by Uyuni or SUSE Multi-Linux Manager for outstanding patches. Login credentials are assigned using the following shell variables:
+    desc = """%(prog)s is used to check systems managed by Uyuni or SUSE Multi-Linux Manager for outstanding patches. Login credentials are assigned using the following shell variables:
     UYUNI_LOGIN  username
     UYUNI_PASSWORD  password
     
     It is also possible to create an authfile (permissions 0600) for usage with this script. The first line needs to contain the username, the second line should consist of the appropriate password. If you're not defining variables or an authfile you will be prompted to enter your login information."""
 
-    epilog = """
-    Checkout the GitHub page for updates: https://github.com/stdevel/check_uyuni_currency
+    epilog = """Checkout the GitHub page for updates:
+    https://github.com/stdevel/check_uyuni_currency
     """
 
     parser = argparse.ArgumentParser(description=desc, epilog=epilog)
     parser.add_argument("--version", action="version", version=__version__)
 
     # define option groups
-    gen_opts = parser.add_argument_group(parser, "Generic options")
-    space_opts = parser.add_argument_group(parser, "Uyuni options")
-    system_opts = parser.add_argument_group(parser, "System options")
-    stat_opts = parser.add_argument_group(parser, "Statistic options")
+    gen_opts = parser.add_argument_group("Generic options")
+    uyuni_opts = parser.add_argument_group("Uyuni options")
+    system_opts = parser.add_argument_group("System options")
+    stat_opts = parser.add_argument_group("Statistic options")
 
     # -d / --debug
     gen_opts.add_argument(
@@ -410,7 +428,7 @@ def parse_options(args=None):
     )
 
     # -a / --authfile
-    space_opts.add_argument(
+    uyuni_opts.add_argument(
         "-a",
         "--authfile",
         dest="authfile",
@@ -420,13 +438,23 @@ def parse_options(args=None):
     )
 
     # -s / --server
-    space_opts.add_argument(
+    uyuni_opts.add_argument(
         "-s",
         "--server",
         dest="server",
         metavar="SERVER",
         default="localhost",
         help="defines the server to use (default: localhost)",
+    )
+
+    # -k / --insecure
+    uyuni_opts.add_argument(
+        "-k",
+        "--insecure",
+        dest="verify_ssl",
+        default=True,
+        action="store_false",
+        help="disables SSL verificatino (default: no)"
     )
 
     # -y / --generic-statistics
@@ -489,7 +517,7 @@ def parse_options(args=None):
         "--system",
         dest="system",
         default=[],
-        metavar="SYSTEM",
+        metavar="SYSTEM ID OR NAME",
         action="append",
         help="defines one or multiple system(s) to check",
     )
@@ -595,7 +623,7 @@ def main(options, args):
     LOGGER.debug("Arguments: %s", str(args))
 
     # check statistics or systems
-    get_currency_data(options.gen_stats)
+    get_currency_data(options)
     if options.gen_stats:
         check_stats(options)
     else:
@@ -611,7 +639,7 @@ def cli():
 
     # set logging level
     logging.basicConfig()
-    if options.generic_debug:
+    if options.debug:
         LOG_LEVEL = logging.DEBUG
     else:
         LOG_LEVEL = logging.INFO
