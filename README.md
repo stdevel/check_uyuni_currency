@@ -39,7 +39,7 @@ $ ./check_uyuni_currency.py -a myauthfile -S giertz.stankowic.loc
 ## Requirements
 
 The plugin requires the `xmlrpclic` module which is shipped with `rhnlib`.
-A minimum API version of 1.4 is required - the script checks the API version and aborts if you are using a historic version of Uyuni.
+A minimum API version of 24 is required - the script checks the API version and aborts if you are using a historic version of Uyuni.
 
 ## Usage
 
@@ -55,6 +55,7 @@ The following parameters can be specified:
 | `-P` / `--show-perfdata` | enables performance data (*default: no*) |
 | `-a` / `--authfile` | defines an auth file to use instead of shell variables |
 | `-s` / `--server` | defines the server to use (*default: localhost*) |
+| `-k` / `--insecure` | disables SSL verification (*default: no*) |
 | `-S` / `--system` | defines one or multiple system(s) to check |
 | `-A` / `--all-systems` | checks all registered systems - USE WITH CAUTION (*default: no*) |
 | `-t` / `--total-warning` | defines total package update warning threshold (*default: empty*) |
