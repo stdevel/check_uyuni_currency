@@ -14,10 +14,3 @@ releases:
         url: "file:///check_uyuni_currency.py"
         description: "Release 0.7.0"
         checksum: 144bc78d33df6dd8a2b1a6858c940c16
-  - name: 0.5.6
-    description: "0.5.6 Release"
-    files: 
-      - name: check_uyuni_currency.py
-        url: "file:///check_uyuni_currency.py"
-        description: "Release 0.5.6"
-        checksum: c68201f8840abdfe2c6d6e04361776bd
